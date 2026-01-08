@@ -305,6 +305,46 @@
             0%, 100% { background: rgba(255, 0, 0, 0.2); }
             50% { background: rgba(255, 0, 0, 0.4); }
         }
+
+        .difficulty-selector {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .difficulty-selector span {
+            color: #fff;
+            font-size: clamp(0.8rem, 2.5vw, 1rem);
+        }
+
+        .diff-btn {
+            padding: 8px 15px;
+            font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+            border: 2px solid #555;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .diff-btn:hover {
+            border-color: #888;
+            color: #fff;
+        }
+
+        .diff-btn.active {
+            border-color: #00ff88;
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.2);
+        }
+
+        #easyBtn.active { border-color: #00ff88; color: #00ff88; }
+        #mediumBtn.active { border-color: #ffa500; color: #ffa500; background: rgba(255, 165, 0, 0.2); }
+        #hardBtn.active { border-color: #ff4444; color: #ff4444; background: rgba(255, 68, 68, 0.2); }
     </style>
 </head>
 <body>
@@ -315,6 +355,7 @@
             <div class="info-box">Level: <span id="level">1</span></div>
             <div class="info-box">Score: <span id="score">0</span></div>
             <div class="info-box">Escapes: <span id="escapes">0</span></div>
+            <div class="info-box" id="difficultyDisplay">😊 <span id="diffText">Easy</span></div>
             <div class="info-box danger">⚠️ Arrows: <span id="arrowCount">0</span></div>
         </div>
         
@@ -332,6 +373,13 @@
         <div class="controls">
             <button id="startBtn">▶️ Start Game</button>
             <button id="resetBtn">🔄 New Maze</button>
+        </div>
+        
+        <div class="difficulty-selector">
+            <span>Difficulty:</span>
+            <button class="diff-btn active" id="easyBtn">😊 Easy</button>
+            <button class="diff-btn" id="mediumBtn">😐 Medium</button>
+            <button class="diff-btn" id="hardBtn">💀 Hard</button>
         </div>
         
         <p class="instructions">
@@ -391,15 +439,53 @@
         let level = 1;
         let arrowInterval = null;
         let animationId = null;
-        let arrowSpeed = 100;
-        let arrowSpawnRate = 2000;
-        let maxArrows = 5;
+        let arrowSpeed = 0.08;
+        let arrowSpawnRate = 4000;
+        let maxArrows = 2;
         let targetCell = null;
         let dangerLevel = 0;
         let survivalTime = 0;
         let survivalInterval = null;
         let exitPulse = 0;
         let warningCells = [];
+        let difficulty = 'easy';
+
+        // Difficulty settings
+        const difficultySettings = {
+            easy: {
+                initialArrows: 1,
+                maxArrows: 3,
+                arrowSpeed: 0.06,
+                spawnRate: 5000,
+                spawnRateDecrease: 200,
+                minSpawnRate: 2000,
+                arrowsPerLevel: 0.5,
+                warningTime: 1000,
+                startDelay: 3000
+            },
+            medium: {
+                initialArrows: 2,
+                maxArrows: 6,
+                arrowSpeed: 0.1,
+                spawnRate: 3000,
+                spawnRateDecrease: 250,
+                minSpawnRate: 1200,
+                arrowsPerLevel: 1,
+                warningTime: 600,
+                startDelay: 2000
+            },
+            hard: {
+                initialArrows: 3,
+                maxArrows: 10,
+                arrowSpeed: 0.14,
+                spawnRate: 2000,
+                spawnRateDecrease: 300,
+                minSpawnRate: 600,
+                arrowsPerLevel: 1.5,
+                warningTime: 400,
+                startDelay: 1000
+            }
+        };
 
         // Load player image
         const playerImage = new Image();
@@ -775,16 +861,19 @@
                     arrows.push(arrow);
                     arrowCountEl.textContent = arrows.length;
                 }
-            }, 500); // 500ms warning before arrow spawns
+            }, difficultySettings[difficulty].warningTime); // Warning time based on difficulty
         }
 
         function spawnMultipleArrows() {
             if (!gameRunning || gameOver) return;
             
-            // Spawn more arrows as time goes on
-            const arrowsToSpawn = Math.min(1 + Math.floor(survivalTime / 10), 4);
+            // Spawn arrows based on difficulty and level
+            const settings = difficultySettings[difficulty];
+            const baseArrows = difficulty === 'easy' ? 1 : (difficulty === 'medium' ? 1 : 2);
+            const arrowsToSpawn = Math.min(baseArrows + Math.floor(level / 3), 3);
+            
             for (let i = 0; i < arrowsToSpawn; i++) {
-                setTimeout(() => spawnArrow(), i * 400);
+                setTimeout(() => spawnArrow(), i * 500);
             }
         }
 
@@ -819,10 +908,12 @@
         }
 
         function updateArrows() {
+            const settings = difficultySettings[difficulty];
+            
             for (let i = arrows.length - 1; i >= 0; i--) {
                 const arrow = arrows[i];
                 
-                arrow.progress += 0.12; // Slightly faster arrows
+                arrow.progress += settings.arrowSpeed; // Arrow speed based on difficulty
                 
                 if (arrow.progress >= 1) {
                     arrow.progress = 0;
@@ -934,10 +1025,13 @@
                 escapes++;
                 escapesEl.textContent = escapes;
                 
-                // Bonus points for survival time
-                const timeBonus = survivalTime * 10;
-                const levelBonus = level * 100;
-                score += 200 + timeBonus + levelBonus;
+                const settings = difficultySettings[difficulty];
+                
+                // Bonus points for survival time and difficulty
+                const diffMultiplier = difficulty === 'easy' ? 1 : (difficulty === 'medium' ? 1.5 : 2);
+                const timeBonus = survivalTime * 10 * diffMultiplier;
+                const levelBonus = level * 100 * diffMultiplier;
+                score += Math.floor(200 + timeBonus + levelBonus);
                 scoreEl.textContent = score;
                 level++;
                 levelEl.textContent = level;
@@ -945,9 +1039,9 @@
                 // Reset survival time for new level
                 survivalTime = 0;
                 
-                // Increase difficulty
-                arrowSpawnRate = Math.max(600, arrowSpawnRate - 150);
-                maxArrows = Math.min(12, 5 + level);
+                // Gradual difficulty increase per level
+                arrowSpawnRate = Math.max(settings.minSpawnRate, arrowSpawnRate - settings.spawnRateDecrease);
+                maxArrows = Math.min(settings.maxArrows, settings.initialArrows + Math.floor(level * settings.arrowsPerLevel));
                 
                 // Show level up message
                 showLevelUp();
@@ -960,16 +1054,25 @@
                 arrowCountEl.textContent = 0;
                 generateMaze();
                 
+                // Longer break between levels on easy mode
+                const breakTime = difficulty === 'easy' ? 3000 : (difficulty === 'medium' ? 2000 : 1500);
+                
                 setTimeout(() => {
                     if (gameRunning) {
                         arrowInterval = setInterval(spawnMultipleArrows, arrowSpawnRate);
-                        spawnArrow(); // Immediate first arrow
+                        // Delay first arrow on new level
+                        setTimeout(() => {
+                            if (gameRunning) spawnArrow();
+                        }, difficulty === 'easy' ? 2000 : 1000);
                     }
-                }, 2000);
+                }, breakTime);
             }
         }
 
         function showLevelUp() {
+            const settings = difficultySettings[difficulty];
+            const diffMultiplier = difficulty === 'easy' ? 1 : (difficulty === 'medium' ? 1.5 : 2);
+            
             const overlay = document.createElement('div');
             overlay.style.cssText = `
                 position: fixed;
@@ -978,31 +1081,39 @@
                 transform: translate(-50%, -50%);
                 background: linear-gradient(135deg, rgba(0, 255, 136, 0.95), rgba(0, 200, 100, 0.95));
                 color: #1a1a2e;
-                padding: 40px 80px;
+                padding: clamp(20px, 5vw, 40px) clamp(30px, 8vw, 80px);
                 border-radius: 20px;
-                font-size: 2.5rem;
+                font-size: clamp(1.5rem, 5vw, 2.5rem);
                 font-weight: bold;
                 z-index: 1000;
                 text-align: center;
                 border: 4px solid #fff;
                 box-shadow: 0 0 50px rgba(0, 255, 136, 0.8);
                 animation: levelUp 2s ease-out forwards;
+                max-width: 90vw;
             `;
-            const timeBonus = (survivalTime || 1) * 10;
-            const levelBonus = (level - 1) * 100;
+            const timeBonus = Math.floor((survivalTime || 1) * 10 * diffMultiplier);
+            const levelBonus = Math.floor((level - 1) * 100 * diffMultiplier);
+            
+            // Different messages based on difficulty
+            const nextLevelMsg = difficulty === 'easy' ? 
+                'Keep going! 🌟' : 
+                (difficulty === 'medium' ? 'Getting harder! ⚡' : 'DANGER INCOMING! 💀');
+            
             overlay.innerHTML = `
                 🎉 ESCAPED! 🎉<br>
-                <span style="font-size: 1.8rem;">LEVEL ${level}</span><br>
-                <span style="font-size: 1rem; color: #1a5a2e;">
+                <span style="font-size: clamp(1.2rem, 4vw, 1.8rem);">LEVEL ${level}</span><br>
+                <span style="font-size: clamp(0.7rem, 2.5vw, 1rem); color: #1a5a2e;">
                     +200 escape bonus<br>
                     +${timeBonus} time bonus<br>
                     +${levelBonus} level bonus<br>
-                    <strong>More arrows incoming! 💀</strong>
+                    <strong>${nextLevelMsg}</strong>
                 </span>
             `;
             document.body.appendChild(overlay);
             
-            setTimeout(() => overlay.remove(), 2000);
+            const breakTime = difficulty === 'easy' ? 2500 : (difficulty === 'medium' ? 2000 : 1500);
+            setTimeout(() => overlay.remove(), breakTime);
         }
 
         function gameLoop() {
@@ -1025,6 +1136,13 @@
         function startGame() {
             if (gameRunning) return;
             
+            const settings = difficultySettings[difficulty];
+            
+            // Apply difficulty settings
+            arrowSpawnRate = settings.spawnRate;
+            maxArrows = settings.initialArrows + Math.floor(level * settings.arrowsPerLevel);
+            arrowSpeed = settings.arrowSpeed;
+            
             gameRunning = true;
             gameOver = false;
             survivalTime = 0;
@@ -1032,22 +1150,26 @@
             startBtn.textContent = '💀 SURVIVE!';
             startBtn.disabled = true;
             
+            // Disable difficulty buttons during game
+            document.querySelectorAll('.diff-btn').forEach(btn => btn.disabled = true);
+            
             // Start survival timer
             survivalInterval = setInterval(() => {
                 if (gameRunning && !gameOver) {
                     survivalTime++;
-                    // Increase difficulty over time
-                    if (survivalTime % 15 === 0) {
-                        maxArrows = Math.min(maxArrows + 1, 10);
-                        arrowSpawnRate = Math.max(arrowSpawnRate - 200, 800);
+                    // Gradual difficulty increase over time (slower on easy)
+                    const increaseRate = difficulty === 'easy' ? 20 : (difficulty === 'medium' ? 15 : 10);
+                    if (survivalTime % increaseRate === 0) {
+                        maxArrows = Math.min(maxArrows + 1, settings.maxArrows);
+                        arrowSpawnRate = Math.max(arrowSpawnRate - settings.spawnRateDecrease, settings.minSpawnRate);
                     }
                 }
             }, 1000);
             
-            // Spawn initial arrows after short delay
+            // Spawn initial arrows after delay based on difficulty
             setTimeout(() => {
-                spawnArrow();
-            }, 1000);
+                if (gameRunning) spawnArrow();
+            }, settings.startDelay);
             
             arrowInterval = setInterval(spawnMultipleArrows, arrowSpawnRate);
             gameLoop();
@@ -1076,13 +1198,16 @@
             clearInterval(survivalInterval);
             cancelAnimationFrame(animationId);
             
+            const settings = difficultySettings[difficulty];
+            
             arrows = [];
             score = 0;
             escapes = 0;
             level = 1;
             survivalTime = 0;
-            arrowSpawnRate = 2000;
-            maxArrows = 5;
+            arrowSpawnRate = settings.spawnRate;
+            maxArrows = settings.initialArrows;
+            arrowSpeed = settings.arrowSpeed;
             targetCell = null;
             warningCells = [];
             
@@ -1095,6 +1220,9 @@
             startBtn.disabled = false;
             gameOverOverlay.style.display = 'none';
             
+            // Re-enable difficulty buttons
+            document.querySelectorAll('.diff-btn').forEach(btn => btn.disabled = false);
+            
             generateMaze();
             drawGame();
         }
@@ -1103,6 +1231,33 @@
         startBtn.addEventListener('click', startGame);
         resetBtn.addEventListener('click', resetGame);
         playAgainBtn.addEventListener('click', resetGame);
+
+        // Difficulty selection
+        const diffTextEl = document.getElementById('diffText');
+        const diffDisplayEl = document.getElementById('difficultyDisplay');
+        
+        function setDifficulty(diff) {
+            difficulty = diff;
+            
+            // Update button states
+            document.querySelectorAll('.diff-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(diff + 'Btn').classList.add('active');
+            
+            // Update display
+            const icons = { easy: '😊', medium: '😐', hard: '💀' };
+            const colors = { easy: '#00ff88', medium: '#ffa500', hard: '#ff4444' };
+            diffTextEl.textContent = diff.charAt(0).toUpperCase() + diff.slice(1);
+            diffDisplayEl.innerHTML = `${icons[diff]} <span id="diffText" style="color: ${colors[diff]}">${diffTextEl.textContent}</span>`;
+            
+            // Reset game with new difficulty
+            if (!gameRunning) {
+                resetGame();
+            }
+        }
+        
+        document.getElementById('easyBtn').addEventListener('click', () => setDifficulty('easy'));
+        document.getElementById('mediumBtn').addEventListener('click', () => setDifficulty('medium'));
+        document.getElementById('hardBtn').addEventListener('click', () => setDifficulty('hard'));
 
         // Keyboard controls
         document.addEventListener('keydown', (e) => {
