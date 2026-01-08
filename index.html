@@ -454,38 +454,53 @@
         const difficultySettings = {
             easy: {
                 initialArrows: 1,
-                maxArrows: 3,
-                arrowSpeed: 0.06,
-                spawnRate: 5000,
-                spawnRateDecrease: 200,
-                minSpawnRate: 2000,
-                arrowsPerLevel: 0.5,
-                warningTime: 1000,
-                startDelay: 3000
+                maxArrowsBase: 1,      // Level 1 = 1 arrow, Level 2 = 2 arrows, etc.
+                maxArrowsCap: 5,       // Maximum arrows even at high levels
+                arrowSpeed: 0.05,
+                spawnRate: 6000,
+                spawnRateDecrease: 300,
+                minSpawnRate: 2500,
+                warningTime: 1200,
+                startDelay: 4000
             },
             medium: {
                 initialArrows: 2,
-                maxArrows: 6,
-                arrowSpeed: 0.1,
-                spawnRate: 3000,
+                maxArrowsBase: 2,
+                maxArrowsCap: 7,
+                arrowSpeed: 0.08,
+                spawnRate: 4000,
                 spawnRateDecrease: 250,
-                minSpawnRate: 1200,
-                arrowsPerLevel: 1,
-                warningTime: 600,
-                startDelay: 2000
+                minSpawnRate: 1500,
+                warningTime: 800,
+                startDelay: 2500
             },
             hard: {
                 initialArrows: 3,
-                maxArrows: 10,
-                arrowSpeed: 0.14,
-                spawnRate: 2000,
+                maxArrowsBase: 3,
+                maxArrowsCap: 12,
+                arrowSpeed: 0.12,
+                spawnRate: 2500,
                 spawnRateDecrease: 300,
-                minSpawnRate: 600,
-                arrowsPerLevel: 1.5,
-                warningTime: 400,
-                startDelay: 1000
+                minSpawnRate: 800,
+                warningTime: 500,
+                startDelay: 1500
             }
         };
+        
+        // Get max arrows for current level based on difficulty
+        function getMaxArrowsForLevel(lvl) {
+            const settings = difficultySettings[difficulty];
+            if (difficulty === 'easy') {
+                // Easy: Level 1 = 1 arrow, Level 2 = 2, Level 3 = 3, etc.
+                return Math.min(lvl, settings.maxArrowsCap);
+            } else if (difficulty === 'medium') {
+                // Medium: Level 1 = 2, Level 2 = 3, Level 3 = 4, etc.
+                return Math.min(settings.maxArrowsBase + lvl - 1, settings.maxArrowsCap);
+            } else {
+                // Hard: Level 1 = 3, Level 2 = 5, Level 3 = 7, etc.
+                return Math.min(settings.maxArrowsBase + (lvl - 1) * 2, settings.maxArrowsCap);
+            }
+        }
 
         // Load player image
         const playerImage = new Image();
@@ -867,13 +882,24 @@
         function spawnMultipleArrows() {
             if (!gameRunning || gameOver) return;
             
-            // Spawn arrows based on difficulty and level
-            const settings = difficultySettings[difficulty];
-            const baseArrows = difficulty === 'easy' ? 1 : (difficulty === 'medium' ? 1 : 2);
-            const arrowsToSpawn = Math.min(baseArrows + Math.floor(level / 3), 3);
+            // Only spawn if we haven't reached max arrows for this level
+            if (arrows.length >= maxArrows) return;
+            
+            // Easy mode: spawn 1 arrow at a time
+            // Medium: spawn 1-2 based on level
+            // Hard: spawn 2-3 based on level
+            let arrowsToSpawn = 1;
+            if (difficulty === 'medium') {
+                arrowsToSpawn = level >= 3 ? 2 : 1;
+            } else if (difficulty === 'hard') {
+                arrowsToSpawn = level >= 2 ? (level >= 4 ? 3 : 2) : 2;
+            }
+            
+            // Don't spawn more than we're allowed
+            arrowsToSpawn = Math.min(arrowsToSpawn, maxArrows - arrows.length);
             
             for (let i = 0; i < arrowsToSpawn; i++) {
-                setTimeout(() => spawnArrow(), i * 500);
+                setTimeout(() => spawnArrow(), i * 600);
             }
         }
 
@@ -1039,9 +1065,10 @@
                 // Reset survival time for new level
                 survivalTime = 0;
                 
-                // Gradual difficulty increase per level
+                // Update max arrows based on NEW level (Level 1=1, Level 2=2, etc. for easy)
+                maxArrows = getMaxArrowsForLevel(level);
+                // Slightly decrease spawn rate each level
                 arrowSpawnRate = Math.max(settings.minSpawnRate, arrowSpawnRate - settings.spawnRateDecrease);
-                maxArrows = Math.min(settings.maxArrows, settings.initialArrows + Math.floor(level * settings.arrowsPerLevel));
                 
                 // Show level up message
                 showLevelUp();
@@ -1055,7 +1082,7 @@
                 generateMaze();
                 
                 // Longer break between levels on easy mode
-                const breakTime = difficulty === 'easy' ? 3000 : (difficulty === 'medium' ? 2000 : 1500);
+                const breakTime = difficulty === 'easy' ? 3500 : (difficulty === 'medium' ? 2500 : 1500);
                 
                 setTimeout(() => {
                     if (gameRunning) {
@@ -1095,10 +1122,11 @@
             const timeBonus = Math.floor((survivalTime || 1) * 10 * diffMultiplier);
             const levelBonus = Math.floor((level - 1) * 100 * diffMultiplier);
             
-            // Different messages based on difficulty
-            const nextLevelMsg = difficulty === 'easy' ? 
-                'Keep going! 🌟' : 
-                (difficulty === 'medium' ? 'Getting harder! ⚡' : 'DANGER INCOMING! 💀');
+            // Show how many arrows next level will have
+            const nextLevelArrows = getMaxArrowsForLevel(level);
+            const arrowMsg = difficulty === 'easy' ? 
+                `Next: ${nextLevelArrows} arrow${nextLevelArrows > 1 ? 's' : ''} 🏹` :
+                `${nextLevelArrows} arrows incoming! 🏹`;
             
             overlay.innerHTML = `
                 🎉 ESCAPED! 🎉<br>
@@ -1107,12 +1135,12 @@
                     +200 escape bonus<br>
                     +${timeBonus} time bonus<br>
                     +${levelBonus} level bonus<br>
-                    <strong>${nextLevelMsg}</strong>
+                    <strong>${arrowMsg}</strong>
                 </span>
             `;
             document.body.appendChild(overlay);
             
-            const breakTime = difficulty === 'easy' ? 2500 : (difficulty === 'medium' ? 2000 : 1500);
+            const breakTime = difficulty === 'easy' ? 3000 : (difficulty === 'medium' ? 2500 : 1500);
             setTimeout(() => overlay.remove(), breakTime);
         }
 
@@ -1138,9 +1166,9 @@
             
             const settings = difficultySettings[difficulty];
             
-            // Apply difficulty settings
+            // Apply difficulty settings - arrows based on level
             arrowSpawnRate = settings.spawnRate;
-            maxArrows = settings.initialArrows + Math.floor(level * settings.arrowsPerLevel);
+            maxArrows = getMaxArrowsForLevel(level);
             arrowSpeed = settings.arrowSpeed;
             
             gameRunning = true;
@@ -1153,14 +1181,13 @@
             // Disable difficulty buttons during game
             document.querySelectorAll('.diff-btn').forEach(btn => btn.disabled = true);
             
-            // Start survival timer
+            // Start survival timer - only increase spawn rate over time, not max arrows
             survivalInterval = setInterval(() => {
                 if (gameRunning && !gameOver) {
                     survivalTime++;
-                    // Gradual difficulty increase over time (slower on easy)
-                    const increaseRate = difficulty === 'easy' ? 20 : (difficulty === 'medium' ? 15 : 10);
+                    // Gradually increase spawn rate over time
+                    const increaseRate = difficulty === 'easy' ? 30 : (difficulty === 'medium' ? 20 : 15);
                     if (survivalTime % increaseRate === 0) {
-                        maxArrows = Math.min(maxArrows + 1, settings.maxArrows);
                         arrowSpawnRate = Math.max(arrowSpawnRate - settings.spawnRateDecrease, settings.minSpawnRate);
                     }
                 }
@@ -1206,7 +1233,7 @@
             level = 1;
             survivalTime = 0;
             arrowSpawnRate = settings.spawnRate;
-            maxArrows = settings.initialArrows;
+            maxArrows = getMaxArrowsForLevel(1); // Level 1 arrows
             arrowSpeed = settings.arrowSpeed;
             targetCell = null;
             warningCells = [];
